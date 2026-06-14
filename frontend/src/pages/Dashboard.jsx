@@ -1,209 +1,186 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-    Plus, MessageSquare, Utensils, Calendar,
-    Droplets, Zap, Activity, ChevronRight, Settings,
-    ArrowUpRight, Wind
+    MessageSquare, Utensils, Calendar, Droplets,
+    Activity, ArrowUpRight, Wind, Bell, Sparkles
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import api from '../services/api';
 
 const Dashboard = ({ user }) => {
-    const [stats, setStats] = useState({
-        calories: 1842,
-        protein: 112,
-        carbs: 210,
-        fat: 56,
-        hydration: 1.8
+    const navigate = useNavigate();
+    const [stats] = useState({
+        calories: 1842, target: 2450, protein: 112, carbs: 210, fat: 56, hydration: 1.8,
     });
 
+    const calPct = Math.min(stats.calories / stats.target, 1);
+    const R = 60, C = 2 * Math.PI * R;
+
+    const quickActions = [
+        { icon: MessageSquare, label: 'Ask AI', to: '/chat', primary: true },
+        { icon: Utensils, label: 'Log Meal', to: '/meal' },
+        { icon: Calendar, label: 'Workout', to: '/workout' },
+    ];
+
     return (
-        <div className="pb-24 pt-6 px-4 max-w-lg mx-auto bg-[#f8fafc] min-h-screen">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-health-100 flex items-center justify-center border-2 border-health-500 overflow-hidden">
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
-                    </div>
-                    <span className="text-health-900 font-bold text-sm">The Living Sanctuary</span>
+        <div className="pb-28 pt-6 px-4 max-w-lg mx-auto" style={{ animation: 'var(--animate-fade-up)' }}>
+            <header className="flex justify-between items-center mb-7">
+                <div>
+                    <p className="text-xs font-semibold text-ink-faint uppercase tracking-widest">Good morning</p>
+                    <h1 className="text-2xl font-extrabold text-ink tracking-tight flex items-center gap-1.5">
+                        {user?.name?.split(' ')[0] || 'Friend'} <span>👋</span>
+                    </h1>
                 </div>
-                <Settings className="text-health-800 w-5 h-5 cursor-pointer" />
+                <button className="relative w-10 h-10 rounded-full glass shadow-soft flex items-center justify-center text-ink-soft">
+                    <Bell size={18} />
+                    <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-health-500 rounded-full ring-2 ring-white" />
+                </button>
+            </header>
+
+            {/* Quick actions */}
+            <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-5 -mx-4 px-4">
+                {quickActions.map(({ icon: Icon, label, to, primary }) => (
+                    <motion.button
+                        key={label}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => navigate(to)}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-full whitespace-nowrap text-sm font-semibold transition-shadow ${
+                            primary
+                                ? 'brand-gradient text-white shadow-glow'
+                                : 'bg-surface text-ink border border-line shadow-soft'
+                        }`}
+                    >
+                        <Icon size={16} className={primary ? '' : 'text-health-600'} /> {label}
+                    </motion.button>
+                ))}
             </div>
 
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                    Hello {user?.name || 'Sanctuary'} <span className="text-2xl">👋</span>
-                </h1>
-                <p className="text-gray-500 text-sm mt-1">Your body is a temple in bloom. Ready for your daily check-in?</p>
-            </div>
+            {/* Main nutrition card */}
+            <motion.div
+                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                className="bg-surface rounded-card p-6 shadow-soft border border-line mb-4"
+            >
+                <div className="flex items-center gap-2 mb-5">
+                    <Activity className="text-health-600" size={16} />
+                    <span className="text-xs font-bold text-ink-soft uppercase tracking-widest">Today's Energy</span>
+                </div>
 
-            {/* Quick Actions */}
-            <div className="flex gap-2 overflow-x-auto pb-6 -mx-4 px-4 no-scrollbar">
-                <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-2 bg-health-600 text-white px-5 py-2.5 rounded-full whitespace-nowrap text-xs font-semibold shadow-lg shadow-health-200"
-                >
-                    <MessageSquare size={16} /> Ask AI
-                </motion.button>
-                <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-2 bg-white text-health-900 px-5 py-2.5 rounded-full whitespace-nowrap text-xs font-semibold border border-gray-100 shadow-sm"
-                >
-                    <Utensils size={16} className="text-health-500" /> Upload Meal
-                </motion.button>
-                <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    className="flex items-center gap-2 bg-white text-health-900 px-5 py-2.5 rounded-full whitespace-nowrap text-xs font-semibold border border-gray-100 shadow-sm"
-                >
-                    <Calendar size={16} className="text-health-500" /> Workout Plan
-                </motion.button>
-            </div>
-
-            {/* Main Stats Card */}
-            <div className="grid grid-cols-1 gap-4 mb-4">
-                <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-50 relative overflow-hidden">
-                    <div className="flex gap-8 items-center">
-                        {/* Circular Progress */}
-                        <div className="relative w-36 h-36 flex items-center justify-center">
-                            <svg className="w-full h-full -rotate-90">
-                                <circle cx="72" cy="72" r="60" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                                <circle cx="72" cy="72" r="60" fill="none" stroke="#15803d" strokeWidth="12" strokeDasharray="377" strokeDashoffset={377 * (1 - 0.75)} strokeLinecap="round" />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-2xl font-bold text-gray-900 tracking-tight">{stats.calories.toLocaleString()}</span>
-                                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Kcal Consumed</span>
-                            </div>
+                <div className="flex gap-6 items-center">
+                    <div className="relative w-32 h-32 flex-shrink-0 flex items-center justify-center">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 144 144">
+                            <circle cx="72" cy="72" r={R} fill="none" stroke="var(--color-line)" strokeWidth="12" />
+                            <motion.circle
+                                cx="72" cy="72" r={R} fill="none" stroke="url(#grad)" strokeWidth="12"
+                                strokeLinecap="round" strokeDasharray={C}
+                                initial={{ strokeDashoffset: C }}
+                                animate={{ strokeDashoffset: C * (1 - calPct) }}
+                                transition={{ duration: 1, ease: 'easeOut' }}
+                            />
+                            <defs>
+                                <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0%" stopColor="#34d399" />
+                                    <stop offset="100%" stopColor="#047857" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className="text-2xl font-extrabold text-ink tracking-tight">{stats.calories.toLocaleString()}</span>
+                            <span className="text-[10px] text-ink-faint uppercase font-bold tracking-widest">of {stats.target}</span>
                         </div>
+                    </div>
 
-                        {/* Detailed Metrics */}
-                        <div className="flex-1 space-y-4">
-                            <div>
-                                <div className="flex justify-between items-end mb-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Energy Balance</span>
-                                    <span className="text-sm font-bold text-health-800">75% of target</span>
-                                </div>
-                                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-health-600 rounded-full" style={{ width: '75%' }}></div>
-                                </div>
-                            </div>
+                    <div className="flex-1 space-y-3">
+                        <Macro label="Protein" value={stats.protein} goal={150} unit="g" pct={75} />
+                        <Macro label="Carbs" value={stats.carbs} goal={260} unit="g" pct={80} />
+                        <Macro label="Fat" value={stats.fat} goal={70} unit="g" pct={80} />
+                    </div>
+                </div>
+            </motion.div>
 
-                            <div>
-                                <div className="flex justify-between items-end mb-1">
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Protein Intake</span>
-                                    <span className="text-[10px] font-bold text-health-800">{stats.protein}g / 150g</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                    <div className="h-full bg-health-400 rounded-full" style={{ width: '74%' }}></div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-gray-50 rounded-xl p-2.5">
-                                    <span className="block text-[8px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Carbs</span>
-                                    <span className="text-sm font-bold text-gray-800">{stats.carbs}g</span>
-                                </div>
-                                <div className="bg-gray-50 rounded-xl p-2.5">
-                                    <span className="block text-[8px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Fat</span>
-                                    <span className="text-sm font-bold text-gray-800">{stats.fat}g</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="absolute top-4 right-4 bg-health-50 p-1 rounded-lg">
-                            <Activity className="text-health-600 w-4 h-4" />
-                        </div>
+            {/* Daily insight */}
+            <div className="bg-surface rounded-card p-6 shadow-soft border border-line mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                    <Wind className="text-health-500" size={16} />
+                    <span className="text-xs font-bold text-ink-soft uppercase tracking-widest">Daily Insight</span>
+                </div>
+                <p className="text-ink text-sm leading-relaxed mb-4">
+                    Your heart-rate variability is higher today — a great window for a high-intensity
+                    session followed by deep hydration.
+                </p>
+                <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-health-50 flex items-center justify-center">
+                        <Sparkles className="text-health-600" size={15} />
+                    </div>
+                    <div>
+                        <span className="block text-xs font-bold text-ink">Sanctuary AI</span>
+                        <span className="block text-[10px] text-ink-faint">Your wellness guide</span>
                     </div>
                 </div>
             </div>
 
-            {/* Secondary Cards Grid */}
-            <div className="grid grid-cols-12 gap-4 mb-24">
-                {/* Daily Insight */}
-                <div className="col-span-12 bg-white rounded-3xl p-6 shadow-sm border border-gray-50">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Wind className="text-health-500 w-4 h-4" />
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Daily Insight</span>
+            {/* Bottom grid */}
+            <div className="grid grid-cols-12 gap-4">
+                <div className="col-span-7 bg-surface rounded-card p-5 shadow-soft border border-line">
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-xs font-bold text-ink uppercase tracking-widest">Movement</span>
+                        <span className="text-[11px] font-bold text-health-600">See all</span>
                     </div>
-                    <p className="text-gray-700 text-sm leading-relaxed mb-4">
-                        "Your heart rate variability is higher today. It's a great afternoon for a high-intensity session followed by deep hydration."
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-green-100 flex items-center justify-center">
-                            <div className="w-3 h-3 bg-health-600 rounded-full"></div>
-                        </div>
-                        <div>
-                            <span className="block text-[10px] font-bold text-gray-900">Sanctuary AI</span>
-                            <span className="block text-[8px] text-gray-400">Wellness Guide</span>
-                        </div>
+                    <div className="space-y-3.5">
+                        <ActivityRow icon={Activity} title="Morning Run" meta="5.2 km · 35 min" kcal="+340" />
+                        <ActivityRow icon={ArrowUpRight} title="Yoga Flow" meta="Guided · 45 min" kcal="+120" />
                     </div>
                 </div>
 
-                {/* Recent Movement */}
-                <div className="col-span-7 bg-white rounded-3xl p-6 shadow-sm border border-gray-50">
-                    <div className="flex justify-between items-center mb-4 text-[10px] font-bold uppercase tracking-widest">
-                        <span className="text-gray-900">Recent Movement</span>
-                        <span className="text-health-600">See all</span>
+                <div className="col-span-5 brand-gradient rounded-card p-5 shadow-glow text-white relative overflow-hidden">
+                    <div className="flex items-center gap-1.5 mb-2">
+                        <Droplets size={15} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Water</span>
                     </div>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-health-50 flex items-center justify-center">
-                                    <Activity className="text-health-600 w-4 h-4" />
-                                </div>
-                                <div>
-                                    <span className="block text-xs font-bold text-gray-900">Morning Run</span>
-                                    <span className="block text-[9px] text-gray-400">5.2 km • 35 mins</span>
-                                </div>
-                            </div>
-                            <span className="text-[10px] font-bold text-health-600">+340 kcal</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-health-50 flex items-center justify-center">
-                                    <ArrowUpRight className="text-health-600 w-4 h-4" />
-                                </div>
-                                <div>
-                                    <span className="block text-xs font-bold text-gray-900">Yoga Flow</span>
-                                    <span className="block text-[9px] text-gray-400">Guiding • 45 mins</span>
-                                </div>
-                            </div>
-                            <span className="text-[10px] font-bold text-health-600">+120 kcal</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Hydration */}
-                <div className="col-span-5 bg-health-200 rounded-3xl p-6 shadow-sm relative overflow-hidden">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Droplets className="text-health-700 w-4 h-4" />
-                        <span className="text-[10px] font-bold text-health-800 uppercase tracking-widest">Hydration</span>
-                    </div>
-                    <p className="text-[9px] text-health-800 opacity-70 leading-tight mb-4">
-                        Keep the water flowing. You're at 60% of your target.
-                    </p>
-
+                    <p className="text-[10px] text-white/80 leading-tight mb-4">60% of your daily goal</p>
                     <div className="flex items-end gap-1 mb-4 h-12">
                         {[30, 60, 45, 90, 70].map((h, i) => (
-                            <div
-                                key={i}
-                                className="flex-1 bg-health-900/10 rounded-full relative"
-                                style={{ height: '100%' }}
-                            >
-                                <div
-                                    className="absolute bottom-0 left-0 right-0 bg-health-900 rounded-full"
-                                    style={{ height: `${h}%` }}
-                                ></div>
+                            <div key={i} className="flex-1 bg-white/20 rounded-full relative h-full">
+                                <div className="absolute bottom-0 inset-x-0 bg-white rounded-full" style={{ height: `${h}%` }} />
                             </div>
                         ))}
                     </div>
-
                     <div className="flex items-baseline gap-1">
-                        <span className="text-xl font-black text-health-900">{stats.hydration.toFixed(1)}</span>
-                        <span className="text-[10px] font-black text-health-900 opacity-60">/3.0L</span>
+                        <span className="text-2xl font-extrabold">{stats.hydration.toFixed(1)}</span>
+                        <span className="text-xs font-bold text-white/70">/ 3.0 L</span>
                     </div>
                 </div>
             </div>
         </div>
     );
 };
+
+const Macro = ({ label, value, goal, unit, pct }) => (
+    <div>
+        <div className="flex justify-between items-end mb-1">
+            <span className="text-[11px] font-semibold text-ink-soft">{label}</span>
+            <span className="text-[11px] font-bold text-ink">{value}{unit} <span className="text-ink-faint font-medium">/ {goal}{unit}</span></span>
+        </div>
+        <div className="w-full h-1.5 bg-line rounded-full overflow-hidden">
+            <motion.div
+                className="h-full brand-gradient rounded-full"
+                initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
+            />
+        </div>
+    </div>
+);
+
+const ActivityRow = ({ icon: Icon, title, meta, kcal }) => (
+    <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-health-50 flex items-center justify-center">
+                <Icon className="text-health-600" size={16} />
+            </div>
+            <div>
+                <span className="block text-xs font-bold text-ink">{title}</span>
+                <span className="block text-[10px] text-ink-faint">{meta}</span>
+            </div>
+        </div>
+        <span className="text-[11px] font-bold text-health-600">{kcal}</span>
+    </div>
+);
 
 export default Dashboard;

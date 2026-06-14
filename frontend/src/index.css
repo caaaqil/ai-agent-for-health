@@ -1,16 +1,124 @@
 @import "tailwindcss";
 
-:root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
-  background-color: #f8fafc;
+/* ------------------------------------------------------------------ *
+ *  Design tokens — Tailwind v4 reads these from @theme (NOT the JS
+ *  config file, which v4 ignores). This is what makes every
+ *  `health-*`, `bg-surface`, `shadow-soft`, etc. class actually exist.
+ * ------------------------------------------------------------------ */
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Brand — fresh emerald/green */
+  --color-health-50: #ecfdf5;
+  --color-health-100: #d1fae5;
+  --color-health-200: #a7f3d0;
+  --color-health-300: #6ee7b7;
+  --color-health-400: #34d399;
+  --color-health-500: #10b981;
+  --color-health-600: #059669;
+  --color-health-700: #047857;
+  --color-health-800: #065f46;
+  --color-health-900: #064e3b;
+  --color-health-950: #022c22;
+
+  /* Neutral surface palette (warm, not cold blue-grey) */
+  --color-ink: #0f1d18;        /* primary text */
+  --color-ink-soft: #5b6b64;   /* secondary text */
+  --color-ink-faint: #93a59c;  /* tertiary text */
+  --color-canvas: #f4f8f5;     /* app background */
+  --color-surface: #ffffff;    /* cards */
+  --color-line: #e6efe9;       /* hairline borders */
+
+  /* Soft, layered shadows */
+  --shadow-soft: 0 1px 2px rgba(6, 78, 59, 0.04), 0 8px 24px -8px rgba(6, 78, 59, 0.10);
+  --shadow-float: 0 10px 30px -10px rgba(6, 78, 59, 0.22);
+  --shadow-glow: 0 12px 32px -8px rgba(16, 185, 129, 0.45);
+
+  --radius-card: 1.75rem;
+
+  /* Animations */
+  --animate-fade-up: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.card-shadow {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+/* ------------------------------------------------------------------ *
+ *  Base
+ * ------------------------------------------------------------------ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background-color: var(--color-canvas);
+    /* subtle ambient wash so the app never feels flat */
+    background-image:
+      radial-gradient(60rem 60rem at 110% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+      radial-gradient(50rem 50rem at -10% 0%, rgba(52, 211, 153, 0.08), transparent 55%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Inputs inherit color so typed text is NEVER invisible */
+  input,
+  textarea,
+  button {
+    font-family: inherit;
+  }
+  input,
+  textarea {
+    color: var(--color-ink);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Utilities
+ * ------------------------------------------------------------------ */
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility glass {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+@utility brand-gradient {
+  background-image: linear-gradient(135deg, var(--color-health-500), var(--color-health-700));
+}
+
+@utility text-gradient {
+  background-image: linear-gradient(120deg, var(--color-health-600), var(--color-health-400));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* nicer thin scrollbar for chat / scroll areas */
+@utility scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-health-200) transparent;
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-health-200);
+    border-radius: 999px;
+  }
 }

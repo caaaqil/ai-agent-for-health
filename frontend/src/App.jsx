@@ -26,7 +26,7 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-[#f8fafc] pb-20">
+      <div className="min-h-screen pb-20">
         {user && <Navbar />}
         <main>
           <Routes>
@@ -37,7 +37,7 @@ function App() {
             <Route path="/chat" element={user ? <Chat user={user} /> : <Navigate to="/login" />} />
             <Route path="/meal" element={user ? <MealAnalyzer user={user} /> : <Navigate to="/login" />} />
             <Route path="/workout" element={user ? <WorkoutPlanner user={user} /> : <Navigate to="/login" />} />
-            <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} handleLogout={handleLogout} /> : <Navigate to="/login" />} />
+            <Route path="/profile" element={user ? <Profile user={user} setUser={setUser} onLogout={handleLogout} /> : <Navigate to="/login" />} />
           </Routes>
         </main>
       </div>

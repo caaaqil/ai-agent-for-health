@@ -1,40 +1,54 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, MessageSquare, Utensils, Calendar, User } from 'lucide-react';
+import { Home, MessageSquare, Utensils, Dumbbell, User } from 'lucide-react';
+import { motion } from 'framer-motion';
+
+const navItems = [
+    { icon: Home, label: 'Home', path: '/' },
+    { icon: MessageSquare, label: 'Chat', path: '/chat' },
+    { icon: Utensils, label: 'Meal', path: '/meal' },
+    { icon: Dumbbell, label: 'Workout', path: '/workout' },
+    { icon: User, label: 'Profile', path: '/profile' },
+];
 
 const Navbar = () => {
     const location = useLocation();
 
-    const navItems = [
-        { icon: <Home size={18} />, label: 'HOME', path: '/' },
-        { icon: <MessageSquare size={18} />, label: 'CHAT', path: '/chat' },
-        { icon: <Utensils size={18} />, label: 'MEAL', path: '/meal' },
-        { icon: <Calendar size={18} />, label: 'WORKOUT', path: '/workout' },
-        { icon: <User size={18} />, label: 'PROFILE', path: '/profile' },
-    ];
-
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-gray-100 px-6 py-3 flex justify-between items-center z-50">
-            {navItems.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                    <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-health-700' : 'text-gray-400'
-                            }`}
-                    >
-                        <div className={`p-2 rounded-2xl transition-all ${isActive ? 'bg-health-100 shadow-sm' : ''
-                            }`}>
-                            {item.icon}
-                        </div>
-                        <span className={`text-[8px] font-black tracking-[0.05em] transition-all ${isActive ? 'opacity-100' : 'opacity-0'
-                            }`}>
-                            {item.label}
-                        </span>
-                    </Link>
-                );
-            })}
+        <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[min(92%,26rem)]">
+            <div className="glass shadow-float rounded-full px-2 py-2 flex justify-between items-center">
+                {navItems.map(({ icon: Icon, label, path }) => {
+                    const isActive = location.pathname === path;
+                    return (
+                        <Link
+                            key={path}
+                            to={path}
+                            aria-label={label}
+                            className="relative flex-1 flex flex-col items-center justify-center py-1.5"
+                        >
+                            {isActive && (
+                                <motion.span
+                                    layoutId="nav-pill"
+                                    className="absolute inset-0 brand-gradient rounded-full shadow-glow"
+                                    transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                                />
+                            )}
+                            <span className={`relative z-10 flex items-center gap-1.5 px-1 transition-colors ${isActive ? 'text-white' : 'text-ink-faint'}`}>
+                                <Icon size={19} strokeWidth={2.2} />
+                                {isActive && (
+                                    <motion.span
+                                        initial={{ opacity: 0, width: 0 }}
+                                        animate={{ opacity: 1, width: 'auto' }}
+                                        className="text-xs font-bold whitespace-nowrap overflow-hidden"
+                                    >
+                                        {label}
+                                    </motion.span>
+                                )}
+                            </span>
+                        </Link>
+                    );
+                })}
+            </div>
         </nav>
     );
 };

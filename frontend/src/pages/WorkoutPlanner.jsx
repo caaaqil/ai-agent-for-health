@@ -1,7 +1,34 @@
 import React, { useState } from 'react';
-import { Settings, Droplets, Zap, Calendar, ChevronRight, PlayCircle, Target, Trophy } from 'lucide-react';
-import { motion } from 'framer-motion';
-import api from '../services/api';
+import { Settings, Zap, Wind, Flame, Coffee, Target, Play, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { streamPost } from '../services/api';
+import AppHeader from '../components/AppHeader';
+
+/* Static style map — Tailwind can't see dynamically built class strings,
+   so each variant must be a complete, literal class set. */
+const TYPE_STYLE = {
+    strength: { tile: 'bg-health-100 text-health-700', icon: Zap },
+    cardio: { tile: 'bg-sky-100 text-sky-600', icon: Target },
+    rest: { tile: 'bg-amber-100 text-amber-600', icon: Coffee },
+    yoga: { tile: 'bg-violet-100 text-violet-600', icon: Wind },
+    hiit: { tile: 'bg-orange-100 text-orange-600', icon: Flame },
+};
+
+const SCHEDULE = [
+    { day: 'Mon', type: 'Chest', kind: 'strength', sub: 'Hypertrophy', dur: '60m' },
+    { day: 'Tue', type: 'Cardio', kind: 'cardio', sub: 'Steady flow', dur: '45m' },
+    { day: 'Wed', type: 'Rest', kind: 'rest', sub: 'Recovery', dur: '—' },
+    { day: 'Thu', type: 'Back', kind: 'strength', sub: 'Posture', dur: '50m' },
+    { day: 'Fri', type: 'Yoga', kind: 'yoga', sub: 'Mobility', dur: '30m' },
+    { day: 'Sat', type: 'HIIT', kind: 'hiit', sub: 'Peak', dur: '35m' },
+    { day: 'Sun', type: 'Legs', kind: 'strength', sub: 'Power', dur: '75m' },
+];
+
+const GOALS = [
+    { id: 'muscle', label: 'Build Muscle' },
+    { id: 'fat-loss', label: 'Lose Fat' },
+    { id: 'endurance', label: 'Endurance' },
+];
 
 const WorkoutPlanner = ({ user }) => {
     const [goal, setGoal] = useState('muscle');
@@ -9,94 +36,115 @@ const WorkoutPlanner = ({ user }) => {
     const [plan, setPlan] = useState(null);
 
     const generatePlan = async () => {
+        if (loading) return;
         setLoading(true);
+        setPlan('');
         try {
-            const res = await api.post('/ai/generate-workout', { userId: user._id, goal });
-            setPlan(res.data.plan);
-        } catch (err) {
-            console.error(err);
+            await streamPost('/ai/generate-workout', { userId: user._id, goal }, setPlan);
+        } catch {
+            setPlan("Couldn't reach the AI service. Make sure Ollama is running, then try again.");
         } finally {
             setLoading(false);
         }
     };
 
-    const schedule = [
-        { day: 'Mon', type: 'Chest', subtitle: 'Hypertrophy focus', duration: '60 min', icon: 'zap', color: 'health-400' },
-        { day: 'Tue', type: 'Cardio', subtitle: 'Steady-state Flow', duration: '45 min', icon: 'target', color: 'health-100' },
-        { day: 'Wed', type: 'Rest', subtitle: 'Mindful recovery', duration: null, icon: 'coffee', color: 'amber-50' },
-        { day: 'Thu', type: 'Back', subtitle: 'Posture & Core', duration: '50 min', icon: 'zap', color: 'health-400' },
-        { day: 'Fri', type: 'Yoga', subtitle: 'Full body mobility', duration: '30 min', icon: 'wind', color: 'health-50' },
-        { day: 'Sat', type: 'HIIT', subtitle: 'Peak intensity', duration: '35 min', icon: 'flame', color: 'orange-50' },
-        { day: 'Sun', type: 'Legs', subtitle: 'Foundation power', duration: '75 min', icon: 'zap', color: 'health-400' },
-    ];
-
     return (
-        <div className="pb-24 pt-6 px-4 max-w-lg mx-auto bg-[#f8fafc] min-h-screen">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-health-100 flex items-center justify-center border-2 border-health-500 overflow-hidden">
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
-                    </div>
-                    <span className="text-health-900 font-bold text-sm">The Living Sanctuary</span>
-                </div>
-                <Settings className="text-health-800 w-5 h-5 cursor-pointer" />
+        <div className="pb-28 pt-6 px-4 max-w-lg mx-auto" style={{ animation: 'var(--animate-fade-up)' }}>
+            <AppHeader
+                right={<Settings className="text-ink-soft w-5 h-5 cursor-pointer" />}
+            />
+
+            <div className="mb-6">
+                <span className="text-[11px] font-bold text-ink-faint uppercase tracking-widest">Weekly momentum</span>
+                <h1 className="text-3xl font-extrabold text-ink tracking-tight mt-1">Your Workout Plan</h1>
             </div>
 
-            <div className="mb-10">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1">Weekly Momentum</span>
-                <h1 className="text-5xl font-extrabold text-health-800 leading-tight mb-2">Workout Plan</h1>
-                <p className="text-gray-500 text-sm leading-relaxed max-w-[280px]">A restorative sequence designed to align your physical vitality with mental clarity. Embrace the rhythm of the sanctuary.</p>
+            {/* Effort highlight */}
+            <div className="brand-gradient rounded-card p-6 shadow-glow text-white relative overflow-hidden mb-6">
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/15 rounded-full blur-2xl" />
+                <span className="text-[11px] font-bold text-white/80 uppercase tracking-widest block mb-1">Total effort this week</span>
+                <span className="text-4xl font-extrabold">5.5 <span className="text-xl font-bold text-white/80">hrs</span></span>
+                <p className="text-xs text-white/80 mt-2 max-w-[240px]">A balanced sequence aligning physical vitality with mental clarity.</p>
+            </div>
 
-                <div className="mt-8 flex items-center gap-4">
-                    <div className="flex-1 bg-health-200 rounded-3xl p-6 relative overflow-hidden flex items-center justify-between">
-                        <div>
-                            <span className="text-[10px] font-bold text-health-800 uppercase tracking-widest block mb-1">Total Effort</span>
-                            <span className="text-3xl font-black text-health-900">5.5 hrs</span>
-                            <span className="block text-[8px] text-health-800 opacity-60 font-bold uppercase tracking-widest">this week</span>
+            {/* Week schedule */}
+            <div className="flex gap-2.5 mb-8 overflow-x-auto no-scrollbar -mx-4 px-4 py-1">
+                {SCHEDULE.map((d) => {
+                    const { tile, icon: Icon } = TYPE_STYLE[d.kind];
+                    return (
+                        <div key={d.day} className="min-w-[92px] bg-surface rounded-3xl p-4 flex flex-col items-center text-center shadow-soft border border-line flex-shrink-0">
+                            <span className="text-[10px] font-bold text-ink-faint uppercase tracking-widest mb-3">{d.day}</span>
+                            <div className={`w-9 h-9 rounded-2xl ${tile} flex items-center justify-center mb-3`}>
+                                <Icon size={16} />
+                            </div>
+                            <span className="text-xs font-bold text-ink">{d.type}</span>
+                            <span className="text-[10px] text-ink-faint mb-2">{d.sub}</span>
+                            <span className="text-[11px] font-bold text-ink mt-auto">{d.dur}</span>
                         </div>
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-health-400 rounded-full blur-3xl -mr-12 -mt-12 opacity-30"></div>
-                    </div>
+                    );
+                })}
+            </div>
+
+            {/* AI plan generator */}
+            <div className="bg-surface rounded-card p-6 shadow-soft border border-line mb-6">
+                <h3 className="text-base font-bold text-ink mb-1">Generate a plan with AI</h3>
+                <p className="text-xs text-ink-soft mb-4">Pick a goal and let Sanctuary build a tailored routine.</p>
+
+                <div className="flex gap-2 mb-4">
+                    {GOALS.map((g) => (
+                        <button
+                            key={g.id}
+                            onClick={() => setGoal(g.id)}
+                            className={`flex-1 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                                goal === g.id
+                                    ? 'brand-gradient text-white shadow-glow'
+                                    : 'bg-canvas text-ink-soft border border-line'
+                            }`}
+                        >
+                            {g.label}
+                        </button>
+                    ))}
                 </div>
+
+                <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={generatePlan}
+                    disabled={loading}
+                    className="w-full brand-gradient text-white text-sm font-bold py-3.5 rounded-2xl shadow-glow flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                    {loading ? <Loader2 size={17} className="animate-spin" /> : <><Play size={16} /> Generate Plan</>}
+                </motion.button>
+
+                <AnimatePresence>
+                    {plan && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            className="overflow-hidden"
+                        >
+                            <div className="mt-4 bg-canvas rounded-2xl p-4 text-sm text-ink leading-relaxed whitespace-pre-wrap border border-line">
+                                {plan}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
-            {/* Week View */}
-            <div className="flex gap-2 mb-10 overflow-x-auto no-scrollbar py-2 -mx-4 px-4">
-                {schedule.map((day, i) => (
-                    <div
-                        key={day.day}
-                        className={`min-w-[100px] rounded-3xl p-4 flex flex-col items-center text-center shadow-sm border border-gray-50 transition-all ${i === 2 ? 'bg-amber-50 border-amber-100' : 'bg-white'}`}
-                    >
-                        <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-4">{day.day}</span>
-                        <div className={`w-8 h-8 rounded-xl bg-${day.color} flex items-center justify-center mb-4`}>
-                            <Zap className={`w-4 h-4 text-health-${i === 2 ? '200' : '800'}`} />
-                        </div>
-                        <span className="text-[11px] font-bold text-gray-900 mb-0.5">{day.type}</span>
-                        <span className="text-[8px] text-gray-400 font-medium mb-2 leading-none whitespace-nowrap">{day.subtitle}</span>
-                        <span className="text-[9px] font-black text-gray-900 mt-auto">{day.duration || '--'}</span>
-                    </div>
-                ))}
-            </div>
-
-            {/* Today's Session Card */}
-            <div className="bg-white rounded-[40px] shadow-xl border border-gray-100 p-8 relative overflow-hidden">
+            {/* Today's session */}
+            <div className="bg-ink rounded-card p-7 shadow-float relative overflow-hidden">
+                <div className="absolute -bottom-12 -right-12 w-44 h-44 bg-health-500/20 rounded-full blur-2xl" />
                 <div className="relative z-10">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">Today's Focus: Deep Resilience</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed mb-8 max-w-[240px]">Your heart rate variability indicates high readiness. Today is the perfect time to push for an extra 10% in your HIIT session. Listen to the sanctuary within.</p>
-
+                    <span className="text-[11px] font-bold text-health-300 uppercase tracking-widest">Today's focus</span>
+                    <h3 className="text-xl font-extrabold text-white mt-1 mb-2">Deep Resilience</h3>
+                    <p className="text-sm text-white/70 leading-relaxed mb-6 max-w-[260px]">
+                        Your readiness is high today — a perfect window to push an extra 10% in your HIIT session.
+                    </p>
                     <motion.button
                         whileTap={{ scale: 0.95 }}
-                        className="flex items-center gap-2 bg-health-900 text-white px-6 py-3 rounded-full text-xs font-bold shadow-xl shadow-health-100"
+                        className="flex items-center gap-2 brand-gradient text-white px-6 py-3 rounded-full text-sm font-bold shadow-glow"
                     >
-                        START TODAY'S SESSION
+                        <Play size={16} /> Start session
                     </motion.button>
-                </div>
-
-                {/* Mascot/Illustration Placeholder */}
-                <div className="absolute top-0 right-0 w-1/2 h-full p-4 pointer-events-none">
-                    <div className="w-full h-full bg-gray-100 rounded-3xl overflow-hidden shadow-inner flex items-center justify-center">
-                        <img src="https://api.dicebear.com/7.x/bottts/svg?seed=Fitness" alt="mascot" className="w-32 h-32 opacity-80" />
-                    </div>
                 </div>
             </div>
         </div>

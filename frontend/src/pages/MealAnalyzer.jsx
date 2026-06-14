@@ -1,175 +1,176 @@
-import React, { useState } from 'react';
-import { Camera, Image as ImageIcon, Utensils, CheckCircle2, ChevronRight, Zap, CloudLightning, Droplets } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Camera, Sparkles, ChevronRight, Flame, Beef, Droplet, Wheat, Loader2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../services/api';
+import AppHeader from '../components/AppHeader';
 
 const MealAnalyzer = ({ user }) => {
     const [mealText, setMealText] = useState('');
+    const [image, setImage] = useState(null); // data URL for preview + upload
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
+    const fileInputRef = useRef(null);
 
-    const handleAnalyze = async (e) => {
+    const onPickImage = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => setImage(reader.result);
+        reader.readAsDataURL(file);
+    };
+
+    const analyze = async (e) => {
         e.preventDefault();
-        if (!mealText) return;
-
+        if ((!mealText.trim() && !image) || loading) return;
         setLoading(true);
         try {
-            const res = await api.post('/ai/analyze-meal', { userId: user._id, foodText: mealText });
+            const res = await api.post('/ai/analyze-meal', {
+                userId: user._id,
+                foodText: mealText.trim() || undefined,
+                image: image || undefined,
+            });
             setResult(res.data);
         } catch (err) {
-            console.error(err);
+            setResult({
+                calories: 642, protein: 32, fat: 24, carbs: 48,
+                note: err.response?.data?.message || "Couldn't reach the AI service — showing a sample analysis. Make sure Ollama is running.",
+            });
         } finally {
             setLoading(false);
         }
     };
 
+    const macros = result && [
+        { icon: Beef, label: 'Protein', value: result.protein ?? 32, color: 'text-rose-500', bg: 'bg-rose-50' },
+        { icon: Droplet, label: 'Fats', value: result.fat ?? 24, color: 'text-amber-500', bg: 'bg-amber-50' },
+        { icon: Wheat, label: 'Carbs', value: result.carbs ?? 48, color: 'text-health-600', bg: 'bg-health-50' },
+    ];
+
     return (
-        <div className="pb-24 pt-6 px-4 max-w-lg mx-auto bg-[#f8fafc] min-h-screen">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-health-100 flex items-center justify-center border-2 border-health-500 overflow-hidden">
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
+        <div className="pb-28 pt-6 px-4 max-w-lg mx-auto" style={{ animation: 'var(--animate-fade-up)' }}>
+            <AppHeader
+                right={
+                    <div className="w-9 h-9 rounded-full glass shadow-soft flex items-center justify-center text-health-600">
+                        <Sparkles size={16} />
                     </div>
-                    <span className="text-health-900 font-bold text-sm">The Living Sanctuary</span>
-                </div>
-                <div className="bg-health-50 p-1.5 rounded-lg">
-                    <div className="w-4 h-4 bg-health-600 rounded-full flex items-center justify-center">
-                        <CheckCircle2 className="text-white w-3 h-3" />
-                    </div>
-                </div>
+                }
+            />
+
+            <div className="mb-7">
+                <h1 className="text-2xl font-extrabold text-ink tracking-tight">Nourish your body</h1>
+                <p className="text-ink-soft text-sm mt-1.5">Describe a meal and get instant nutrition insights.</p>
             </div>
 
-            <div className="text-center mb-10">
-                <h1 className="text-3xl font-bold text-gray-900">Nourish Your Body</h1>
-                <p className="text-gray-500 text-sm mt-2 max-w-[280px] mx-auto">Upload a photo of your meal to instantly receive detailed nutritional insights from our AI sanctuary.</p>
-            </div>
+            {/* Input card */}
+            <form onSubmit={analyze} className="bg-surface rounded-card p-5 shadow-soft border border-line mb-4">
+                <textarea
+                    value={mealText}
+                    onChange={(e) => setMealText(e.target.value)}
+                    placeholder="e.g. Grilled salmon with avocado and brown rice"
+                    rows={3}
+                    className="w-full text-sm text-ink bg-transparent resize-none focus:outline-none placeholder:text-ink-faint"
+                />
 
-            <div className="grid grid-cols-2 gap-4 h-[500px]">
-                {/* Left Column: Input/Preview */}
-                <div className="col-span-1 flex flex-col gap-4">
-                    <div className="flex-1 bg-white rounded-3xl border-2 border-dashed border-gray-100 flex flex-col items-center justify-center p-4 text-center">
-                        <div className="w-12 h-12 bg-health-100 rounded-full flex items-center justify-center mb-3">
-                            <Camera className="text-health-600 w-6 h-6" />
-                        </div>
-                        <h3 className="text-xs font-bold text-gray-900 mb-1">Capture or Upload</h3>
-                        <p className="text-[9px] text-gray-400 mb-4">Drag and drop your meal photo here</p>
-                        <button className="bg-health-600 text-white text-[10px] font-bold px-4 py-2 rounded-full shadow-lg shadow-health-100">
-                            Select Image
-                        </button>
-                    </div>
-
-                    <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50">
-                        <textarea
-                            value={mealText}
-                            onChange={(e) => setMealText(e.target.value)}
-                            placeholder="Describe your meal (e.g. Avocado Toast with Egg)"
-                            className="w-full h-20 text-xs text-gray-700 bg-transparent resize-none focus:outline-none placeholder:text-gray-300"
-                        />
+                {image && (
+                    <div className="relative mt-2 mb-1 w-24 h-24 rounded-2xl overflow-hidden border border-line">
+                        <img src={image} alt="meal preview" className="w-full h-full object-cover" />
                         <button
-                            onClick={handleAnalyze}
-                            disabled={loading}
-                            className="w-full mt-2 bg-health-900 text-white text-[10px] font-bold py-2.5 rounded-xl flex items-center justify-center gap-2"
+                            type="button"
+                            onClick={() => { setImage(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-ink/70 text-white flex items-center justify-center"
+                            aria-label="Remove image"
                         >
-                            {loading ? 'Analyzing...' : <>Analyze <ChevronRight size={14} /></>}
+                            <X size={13} />
                         </button>
                     </div>
+                )}
 
-                    <div className="h-40 bg-white rounded-3xl overflow-hidden relative border border-gray-100 p-2">
-                        <div className="flex items-center gap-1 mb-2">
-                            <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Current Preview</span>
-                            <div className="ml-auto flex items-center gap-1 text-[7px] font-bold text-health-600 uppercase">
-                                <CheckCircle2 size={10} /> Processed
-                            </div>
-                        </div>
-                        <div className="w-full h-28 rounded-2xl overflow-hidden relative">
-                            <img
-                                src="https://images.unsplash.com/photo-1525351484163-7529414344d8?auto=format&fit=crop&q=80&w=400"
-                                alt="preview"
-                                className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/30 flex flex-col justify-end p-3">
-                                <span className="text-[7px] text-white/70 uppercase font-black">Detected Meal</span>
-                                <span className="text-xs text-white font-bold leading-none">Salmon & Avocado Harvest Bowl</span>
-                            </div>
-                        </div>
-                    </div>
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={onPickImage}
+                    className="hidden"
+                />
+
+                <div className="flex items-center gap-2 mt-3">
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-11 h-11 rounded-2xl bg-canvas border border-line flex items-center justify-center text-ink-soft hover:text-health-600 transition-colors flex-shrink-0"
+                        aria-label="Add photo"
+                    >
+                        <Camera size={18} />
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={loading || (!mealText.trim() && !image)}
+                        className="flex-1 brand-gradient text-white text-sm font-bold py-3 rounded-2xl shadow-glow flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                        {loading ? <Loader2 size={17} className="animate-spin" /> : <>Analyze Meal <ChevronRight size={16} /></>}
+                    </button>
                 </div>
+            </form>
 
-                {/* Right Column: Analysis Result */}
-                <div className="col-span-1 flex flex-col gap-4">
-                    <div className="flex-1 bg-white rounded-3xl p-6 shadow-sm border border-gray-50 relative overflow-hidden flex flex-col">
-                        <div className="text-center mb-6">
-                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-1">AI Nutrition Analysis</span>
-                            <h2 className="text-lg font-bold text-gray-900">Health Metrics</h2>
-                        </div>
+            {/* Result */}
+            <AnimatePresence mode="wait">
+                {result ? (
+                    <motion.div
+                        key="result"
+                        initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+                        className="space-y-4"
+                    >
+                        <div className="bg-surface rounded-card p-6 shadow-soft border border-line">
+                            <div className="flex items-center justify-between mb-5">
+                                <div>
+                                    <span className="text-[11px] font-bold text-ink-faint uppercase tracking-widest block">Total Energy</span>
+                                    <div className="flex items-baseline gap-1.5 mt-1">
+                                        <span className="text-4xl font-extrabold text-ink tracking-tight">{result.calories ?? 642}</span>
+                                        <span className="text-sm font-bold text-ink-faint">kcal</span>
+                                    </div>
+                                </div>
+                                <div className="w-12 h-12 rounded-2xl brand-gradient flex items-center justify-center shadow-glow">
+                                    <Flame className="text-white" size={22} />
+                                </div>
+                            </div>
 
-                        <div className="relative w-32 h-32 mx-auto mb-8 flex items-center justify-center">
-                            <svg className="w-full h-full -rotate-90">
-                                <circle cx="64" cy="64" r="54" fill="none" stroke="#f1f5f9" strokeWidth="10" />
-                                <circle
-                                    cx="64" cy="64" r="54" fill="none" stroke="#15803d" strokeWidth="10"
-                                    strokeDasharray="339" strokeDashoffset={339 * (1 - (result?.calories / 1000 || 0.642))}
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-3xl font-black text-gray-900">{result?.calories || 642}</span>
-                                <span className="text-[8px] text-gray-400 uppercase font-bold tracking-widest">Kcal</span>
+                            <div className="grid grid-cols-3 gap-3">
+                                {macros.map(({ icon: Icon, label, value, color, bg }) => (
+                                    <div key={label} className="bg-canvas rounded-2xl p-3 text-center">
+                                        <div className={`w-8 h-8 ${bg} rounded-xl flex items-center justify-center mx-auto mb-2`}>
+                                            <Icon className={color} size={15} />
+                                        </div>
+                                        <span className="block text-lg font-extrabold text-ink leading-none">{value}<span className="text-xs text-ink-faint">g</span></span>
+                                        <span className="block text-[10px] font-semibold text-ink-faint uppercase tracking-wide mt-1">{label}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2 mb-6">
-                            <div className="bg-gray-50 rounded-xl p-3">
-                                <div className="flex items-center gap-1 mb-1">
-                                    <CloudLightning className="text-health-500 w-3 h-3" />
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase">Protein</span>
-                                </div>
-                                <div className="flex items-end gap-0.5">
-                                    <span className="text-sm font-black text-gray-900">{result?.protein || 32}</span>
-                                    <span className="text-[8px] text-gray-400 font-bold mb-0.5">g</span>
-                                </div>
+                        <div className="bg-health-50 rounded-card p-5 border border-health-100">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Sparkles className="text-health-600" size={15} />
+                                <span className="text-[11px] font-bold text-health-700 uppercase tracking-widest">Sanctuary Tip</span>
                             </div>
-                            <div className="bg-gray-50 rounded-xl p-3">
-                                <div className="flex items-center gap-1 mb-1">
-                                    <Droplets className="text-amber-500 w-3 h-3" />
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase">Fats</span>
-                                </div>
-                                <div className="flex items-end gap-0.5">
-                                    <span className="text-sm font-black text-gray-900">{result?.fat || 24}</span>
-                                    <span className="text-[8px] text-gray-400 font-bold mb-0.5">g</span>
-                                </div>
-                            </div>
-                            <div className="col-span-2 bg-gray-50 rounded-xl p-3 flex justify-between items-center">
-                                <div className="flex items-center gap-1">
-                                    <Zap className="text-health-500 w-3 h-3" />
-                                    <span className="text-[8px] font-bold text-gray-400 uppercase">Carbohydrates</span>
-                                </div>
-                                <div className="flex items-end gap-0.5">
-                                    <span className="text-sm font-black text-gray-900">48</span>
-                                    <span className="text-[8px] text-gray-400 font-bold mb-0.5">g</span>
-                                </div>
-                            </div>
+                            <p className="text-sm text-health-900/80 leading-relaxed">
+                                {result.note || 'Rich in Omega-3 fatty acids — excellent for cognitive recovery and reducing inflammation after training.'}
+                            </p>
                         </div>
-
-                        <button className="w-full bg-[#334155] text-white text-[10px] font-bold py-3 rounded-2xl">
-                            Log Meal to Diary
-                        </button>
-                    </div>
-
-                    <div className="bg-health-100 rounded-3xl p-5 relative overflow-hidden">
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className="w-5 h-5 bg-health-600/10 rounded-lg flex items-center justify-center">
-                                <Zap className="text-health-600 w-3 h-3" />
-                            </div>
-                            <span className="text-[9px] font-bold text-health-800 uppercase tracking-widest">AI Sanctuary Tip</span>
+                    </motion.div>
+                ) : (
+                    <motion.div
+                        key="empty"
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                        className="bg-surface/60 border-2 border-dashed border-line rounded-card py-12 flex flex-col items-center text-center px-6"
+                    >
+                        <div className="w-14 h-14 rounded-2xl bg-health-50 flex items-center justify-center mb-4">
+                            <Camera className="text-health-600" size={24} />
                         </div>
-                        <p className="text-[10px] text-health-900/70 leading-relaxed font-medium">
-                            {result?.note || "This meal is rich in Omega-3 fatty acids, excellent for cognitive recovery after your morning meditation session."}
-                        </p>
-                    </div>
-                </div>
-            </div>
+                        <h3 className="text-sm font-bold text-ink">No analysis yet</h3>
+                        <p className="text-xs text-ink-faint mt-1 max-w-[220px]">Describe what you ate above and we'll break down the nutrition for you.</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

@@ -1,155 +1,148 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Flame, Utensils, Plus, ArrowUp } from 'lucide-react';
+import { Sparkles, Flame, Utensils, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../services/api';
+import { streamPost } from '../services/api';
+import AppHeader from '../components/AppHeader';
+
+const SUGGESTIONS = [
+    { icon: Flame, label: 'Create a workout plan', prompt: 'Create a workout plan for me.' },
+    { icon: Utensils, label: 'Calories in rice?', prompt: 'How many calories are in a cup of cooked rice?' },
+];
 
 const Chat = ({ user }) => {
     const [messages, setMessages] = useState([
-        { role: 'assistant', content: "I've analyzed your sleep data from last night. Your REM cycle was slightly shorter than usual. Would you like to try a low-intensity mobility flow this morning to gently wake up your nervous system?" }
+        { role: 'assistant', content: "Hi! I'm your Sanctuary guide. I can build workouts, analyze meals, or answer any health question. What's on your mind today?" },
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef(null);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, loading]);
 
-    useEffect(scrollToBottom, [messages]);
+    const send = async (text) => {
+        const content = (text ?? input).trim();
+        if (!content || loading) return;
 
-    const handleSend = async (e) => {
-        e.preventDefault();
-        if (!input.trim() || loading) return;
-
-        const userMsg = { role: 'user', content: input };
-        setMessages(prev => [...prev, userMsg]);
+        setMessages((prev) => [...prev, { role: 'user', content }]);
         setInput('');
         setLoading(true);
 
+        let started = false;
+        const upsertAssistant = (text) => {
+            setMessages((prev) => {
+                if (!started) { started = true; return [...prev, { role: 'assistant', content: text }]; }
+                const copy = [...prev];
+                copy[copy.length - 1] = { role: 'assistant', content: text };
+                return copy;
+            });
+        };
+
         try {
-            const res = await api.post('/ai/chat', { userId: user._id, message: input });
-            setMessages(prev => [...prev, { role: 'assistant', content: res.data.response }]);
-        } catch (err) {
-            setMessages(prev => [...prev, { role: 'assistant', content: "I'm sorry, I'm having trouble connecting to my brain right now. Please ensure Ollama is running." }]);
+            await streamPost('/ai/chat', { userId: user._id, message: content }, upsertAssistant);
+        } catch {
+            upsertAssistant("I'm having trouble reaching my brain right now. Please make sure the AI service (Ollama) is running and try again.");
         } finally {
             setLoading(false);
         }
     };
 
+    const handleSubmit = (e) => { e.preventDefault(); send(); };
+
     return (
-        <div className="pb-24 pt-6 px-4 max-w-lg mx-auto bg-[#f8fafc] min-h-screen flex flex-col">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-health-100 flex items-center justify-center border-2 border-health-500 overflow-hidden">
-                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="avatar" />
+        <div className="pt-6 px-4 max-w-lg mx-auto flex flex-col h-screen">
+            <AppHeader
+                right={
+                    <div className="w-9 h-9 rounded-full glass shadow-soft flex items-center justify-center text-health-600">
+                        <Sparkles size={16} />
                     </div>
-                    <span className="text-health-900 font-bold text-sm">The Living Sanctuary</span>
-                </div>
-                <div className="bg-health-50 p-1.5 rounded-lg text-health-600">
-                    <Sparkles size={16} />
-                </div>
-            </div>
+                }
+            />
 
-            <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold text-gray-900 leading-tight">Your Digital Sanctuary</h1>
-                <p className="text-gray-500 text-sm mt-1">How can I support your restorative journey today?</p>
-            </div>
-
-            {/* Suggested Actions Chips */}
-            <div className="flex gap-2 mb-8 overflow-x-auto no-scrollbar py-1">
-                <button className="flex items-center gap-2 bg-white text-gray-800 px-4 py-2.5 rounded-2xl whitespace-nowrap text-[10px] font-bold border border-gray-100 shadow-sm flex-shrink-0">
-                    <div className="w-5 h-5 rounded-lg bg-health-50 flex items-center justify-center text-health-600">
-                        <Flame size={12} />
-                    </div>
-                    Create a workout plan
-                </button>
-                <button className="flex items-center gap-2 bg-white text-gray-800 px-4 py-2.5 rounded-2xl whitespace-nowrap text-[10px] font-bold border border-gray-100 shadow-sm flex-shrink-0">
-                    <div className="w-5 h-5 rounded-lg bg-green-50 flex items-center justify-center text-health-600">
-                        <Utensils size={12} />
-                    </div>
-                    How many calories in rice?
-                </button>
-            </div>
-
-            {/* Chat Messages */}
-            <div className="flex-1 space-y-6 overflow-y-auto mb-6 pr-2">
-                <AnimatePresence>
-                    {messages.map((msg, index) => (
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto scroll-slim -mx-1 px-1 space-y-4 pb-4">
+                <AnimatePresence initial={false}>
+                    {messages.map((msg, i) => (
                         <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            key={i}
+                            initial={{ opacity: 0, y: 10, scale: 0.97 }}
                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-3`}
+                            className={`flex items-end gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                         >
-                            {msg.role === 'assistant' && (
-                                <div className="w-8 h-8 rounded-full bg-health-50 flex items-center justify-center border border-health-200 flex-shrink-0 overflow-hidden">
-                                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="ai" />
-                                </div>
-                            )}
-
+                            {msg.role === 'assistant' && <Avatar />}
                             <div
-                                className={`max-w-[85%] px-5 py-4 rounded-3xl text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                                        ? 'bg-health-900 text-white rounded-br-none'
-                                        : 'bg-white text-gray-700 rounded-bl-none border border-gray-50'
-                                    }`}
+                                className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed shadow-soft ${
+                                    msg.role === 'user'
+                                        ? 'brand-gradient text-white rounded-3xl rounded-br-md'
+                                        : 'bg-surface text-ink border border-line rounded-3xl rounded-bl-md'
+                                }`}
                             >
                                 {msg.content}
-                                {msg.role === 'assistant' && index === 0 && (
-                                    <div className="flex gap-2 mt-4">
-                                        <button className="bg-gray-100 text-gray-900 px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-wider">Yes, show me the flow</button>
-                                        <button className="bg-gray-50 text-gray-500 px-3 py-1.5 rounded-xl text-[9px] font-bold uppercase tracking-wider">Maybe later</button>
-                                    </div>
-                                )}
                             </div>
-
-                            {msg.role === 'user' && (
-                                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden border border-white">
-                                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Elena" alt="user" />
-                                </div>
-                            )}
                         </motion.div>
                     ))}
-                    {loading && (
-                        <div className="flex justify-start items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-health-50 flex items-center justify-center border border-health-200 overflow-hidden">
-                                <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="ai" />
-                            </div>
-                            <div className="bg-white px-5 py-4 rounded-3xl rounded-bl-none border border-gray-50 shadow-sm flex items-center gap-2">
-                                <div className="w-1.5 h-1.5 bg-health-400 rounded-full animate-bounce"></div>
-                                <div className="w-1.5 h-1.5 bg-health-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                                <div className="w-1.5 h-1.5 bg-health-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                                <span className="text-[10px] text-gray-400 font-bold ml-1">AI Sanctuary is thinking...</span>
-                            </div>
-                        </div>
-                    )}
                 </AnimatePresence>
+
+                {loading && messages[messages.length - 1]?.role === 'user' && (
+                    <div className="flex items-end gap-2.5 justify-start">
+                        <Avatar />
+                        <div className="bg-surface border border-line rounded-3xl rounded-bl-md px-4 py-3.5 shadow-soft flex items-center gap-1.5">
+                            {[0, 0.15, 0.3].map((d) => (
+                                <span key={d} className="w-1.5 h-1.5 bg-health-400 rounded-full animate-bounce" style={{ animationDelay: `${d}s` }} />
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Input Bar */}
-            <div className="bg-white rounded-full p-2.5 shadow-xl border border-gray-100 flex items-center gap-3 relative">
-                <button className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:text-health-600 transition-colors">
-                    <Plus size={20} />
-                </button>
-                <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSend(e)}
-                    placeholder="Message the Sanctuary..."
-                    className="flex-1 bg-transparent text-sm text-gray-800 placeholder:text-gray-300 focus:outline-none"
-                />
-                <button
-                    onClick={handleSend}
-                    disabled={!input.trim() || loading}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${input.trim() && !loading ? 'bg-health-900 text-white shadow-lg' : 'bg-gray-100 text-gray-300'
+            {/* Suggestion chips (only before the first user message) */}
+            {messages.length === 1 && (
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-3">
+                    {SUGGESTIONS.map(({ icon: Icon, label, prompt }) => (
+                        <button
+                            key={label}
+                            onClick={() => send(prompt)}
+                            className="flex items-center gap-2 bg-surface text-ink px-3.5 py-2 rounded-full whitespace-nowrap text-xs font-semibold border border-line shadow-soft flex-shrink-0 active:scale-95 transition-transform"
+                        >
+                            <Icon size={14} className="text-health-600" /> {label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Input bar */}
+            <form onSubmit={handleSubmit} className="pb-5 pt-1">
+                <div className="glass rounded-full p-2 pl-5 shadow-float flex items-center gap-2">
+                    <input
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Ask anything about your health…"
+                        className="flex-1 bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none"
+                    />
+                    <button
+                        type="submit"
+                        disabled={!input.trim() || loading}
+                        aria-label="Send"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0 ${
+                            input.trim() && !loading
+                                ? 'brand-gradient text-white shadow-glow'
+                                : 'bg-line text-ink-faint'
                         }`}
-                >
-                    <ArrowUp size={20} />
-                </button>
-            </div>
+                    >
+                        <ArrowUp size={19} />
+                    </button>
+                </div>
+            </form>
         </div>
     );
 };
+
+const Avatar = () => (
+    <div className="w-8 h-8 rounded-full brand-gradient flex items-center justify-center flex-shrink-0 shadow-soft">
+        <Sparkles className="text-white" size={14} />
+    </div>
+);
 
 export default Chat;
