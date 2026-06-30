@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Flame, Utensils, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { streamPost } from '../services/api';
+import { streamPost, authService } from '../services/api';
 import AppHeader from '../components/AppHeader';
 
 const SUGGESTIONS = [
@@ -9,13 +9,33 @@ const SUGGESTIONS = [
     { icon: Utensils, label: 'Calories in rice?', prompt: 'How many calories are in a cup of cooked rice?' },
 ];
 
+const GREETING = {
+    role: 'assistant',
+    content: "Hi! I'm your Sanctuary guide. I can build workouts, analyze meals, or answer any health question. What's on your mind today?",
+};
+
 const Chat = ({ user }) => {
-    const [messages, setMessages] = useState([
-        { role: 'assistant', content: "Hi! I'm your Sanctuary guide. I can build workouts, analyze meals, or answer any health question. What's on your mind today?" },
-    ]);
+    const [messages, setMessages] = useState([GREETING]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef(null);
+
+    // Load this user's saved chat history once when the page opens, so past
+    // conversations reappear instead of resetting every time you switch tabs.
+    useEffect(() => {
+        if (!user?._id) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await authService.getProfile(user._id);
+                const history = (res.data.chatHistory || []).map((m) => ({ role: m.role, content: m.content }));
+                if (!cancelled && history.length) setMessages([GREETING, ...history]);
+            } catch {
+                /* keep the greeting if history can't be loaded */
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user._id]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

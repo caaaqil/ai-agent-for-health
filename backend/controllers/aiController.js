@@ -34,6 +34,53 @@ function pipeOllamaStream(ollamaRes, clientRes, { onToken } = {}) {
     });
 }
 
+/**
+ * Build a short profile summary the AI can use to personalise its answers.
+ * Returns '' when we have no usable profile data (e.g. logged-out / empty profile).
+ */
+async function buildUserContext(userId) {
+    if (!userId) return '';
+    let user;
+    try {
+        user = await User.findById(userId);
+    } catch {
+        return '';
+    }
+    if (!user) return '';
+
+    const p = user.profile || {};
+    const bits = [];
+    if (user.name) bits.push(`Name: ${user.name}`);
+    if (p.age) bits.push(`Age: ${p.age}`);
+    if (p.weight) bits.push(`Current weight: ${p.weight} kg`);
+    // Normalise height typed in metres (1.75) to cm (175).
+    const heightCm = p.height > 0 && p.height < 3 ? Math.round(p.height * 100) : p.height;
+    if (heightCm) bits.push(`Height: ${heightCm} cm`);
+    if (p.weight && heightCm) {
+        const bmi = (p.weight / ((heightCm / 100) ** 2)).toFixed(1);
+        bits.push(`BMI: ${bmi}`);
+    }
+
+    if (p.goal && p.goal !== 'maintain' && p.targetWeight) {
+        const verb = p.goal === 'lose weight' ? 'lose' : 'gain';
+        const total = Math.abs((p.startWeight || p.weight) - p.targetWeight).toFixed(1);
+        let line = `Goal: ${verb} ${total} kg (target ${p.targetWeight} kg)`;
+        if (p.deadline) line += ` by ${new Date(p.deadline).toLocaleDateString()}`;
+        bits.push(line);
+
+        const remaining = p.goal === 'lose weight' ? p.weight - p.targetWeight : p.targetWeight - p.weight;
+        if (remaining > 0) bits.push(`Still ${remaining.toFixed(1)} kg to go`);
+    } else if (p.goal) {
+        bits.push(`Goal: ${p.goal}`);
+    }
+
+    if (p.caloriesTarget) bits.push(`Daily calorie target: ${p.caloriesTarget} kcal`);
+    if (p.proteinTarget) bits.push(`Daily protein target: ${p.proteinTarget} g`);
+
+    if (bits.length === 0) return '';
+    return `\nThe user's health profile (personalise your advice to it — use their goal, weight and deadline when relevant, but never repeat the whole profile back to them):\n- ${bits.join('\n- ')}\n`;
+}
+
 // =======================
 // CHAT (streamed)
 // =======================
@@ -60,7 +107,8 @@ Rules you MUST follow:
 - Be factually accurate and concise. Never contradict yourself within an answer.
 - When giving numbers (calories, macros, etc.), make sure they are consistent and realistic. If unsure, give an approximate range and say it is approximate.
 - Do not invent claims. Prefer short, clear, practical advice.`;
-    const fullPrompt = `${systemPrompt}\n\nUser: ${message}\nAssistant:`;
+    const userContext = await buildUserContext(userId);
+    const fullPrompt = `${systemPrompt}\n${userContext}\nUser: ${message}\nAssistant:`;
 
     try {
         const ollamaRes = await axios.post(
@@ -157,11 +205,13 @@ Return ONLY valid JSON in exactly this shape (numbers must be consistent and rea
 // WORKOUT GENERATOR (streamed)
 // =======================
 exports.generateWorkout = async (req, res) => {
-    const { goal } = req.body;
+    const { userId, goal } = req.body;
+    const userContext = await buildUserContext(userId);
 
     const prompt = `You are a professional fitness coach.
 Create a simple, beginner-friendly 7-day workout plan for this goal: "${goal}".
-Rules:
+${userContext}Rules:
+- Tailor the plan to the user's profile above (age, weight, goal) when it is provided.
 - Include rest days.
 - For each day give the focus, 2-4 exercises and a duration.
 - Keep it realistic and easy to follow.

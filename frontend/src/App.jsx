@@ -9,8 +9,19 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
+// Read the saved user, but only trust it if it has a real _id — an object
+// without one is a broken/stale session and should be treated as logged out.
+const loadStoredUser = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem('user'));
+    return stored && stored._id ? stored : null;
+  } catch {
+    return null;
+  }
+};
+
 function App() {
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
+  const [user, setUser] = useState(loadStoredUser);
 
   useEffect(() => {
     if (user) {

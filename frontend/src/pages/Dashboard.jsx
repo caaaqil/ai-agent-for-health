@@ -1,19 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    MessageSquare, Utensils, Calendar, Droplets,
-    Activity, ArrowUpRight, Wind, Bell, Sparkles
+    MessageSquare, Utensils, Calendar, Activity, Target, Flame, Bell, Sparkles, Loader2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { authService } from '../services/api';
+
+const isToday = (d) => {
+    const date = new Date(d);
+    const now = new Date();
+    return date.getFullYear() === now.getFullYear()
+        && date.getMonth() === now.getMonth()
+        && date.getDate() === now.getDate();
+};
+
+const sum = (arr, key) => arr.reduce((t, m) => t + (Number(m[key]) || 0), 0);
 
 const Dashboard = ({ user }) => {
     const navigate = useNavigate();
-    const [stats] = useState({
-        calories: 1842, target: 2450, protein: 112, carbs: 210, fat: 56, hydration: 1.8,
-    });
+    const [data, setData] = useState(null);
+    const [loaded, setLoaded] = useState(false);
 
-    const calPct = Math.min(stats.calories / stats.target, 1);
+    // Always pull fresh data from the database so the dashboard reflects what's
+    // actually stored (survives logout / server restarts).
+    useEffect(() => {
+        if (!user?._id) { setLoaded(true); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await authService.getProfile(user._id);
+                if (!cancelled) setData(res.data);
+            } catch {
+                if (!cancelled) setData(user); // fall back to cached login data
+            } finally {
+                if (!cancelled) setLoaded(true);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [user._id]);
+
+    const profile = data?.profile || {};
+    const meals = data?.mealHistory || [];
+    const todayMeals = meals.filter((m) => isToday(m.date));
+
+    const target = profile.caloriesTarget || 2000;
+    const calories = Math.round(sum(todayMeals, 'calories'));
+    const calPct = Math.min(calories / target, 1);
+
+    const proteinTarget = profile.proteinTarget || 150;
+    const carbsTarget = Math.round((target * 0.45) / 4);
+    const fatTarget = Math.round((target * 0.25) / 9);
+    const protein = Math.round(sum(todayMeals, 'protein'));
+    const carbs = Math.round(sum(todayMeals, 'carbs'));
+    const fat = Math.round(sum(todayMeals, 'fat'));
+
     const R = 60, C = 2 * Math.PI * R;
+
+    // Weight-goal progress (start → current → target)
+    const hasGoal = profile.goal && profile.goal !== 'maintain' && profile.targetWeight;
+    let goalPct = null;
+    if (hasGoal && profile.startWeight) {
+        const total = Math.abs(profile.targetWeight - profile.startWeight) || 1;
+        const done = profile.goal === 'lose weight'
+            ? profile.startWeight - profile.weight
+            : profile.weight - profile.startWeight;
+        goalPct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
+    }
 
     const quickActions = [
         { icon: MessageSquare, label: 'Ask AI', to: '/chat', primary: true },
@@ -21,13 +73,15 @@ const Dashboard = ({ user }) => {
         { icon: Calendar, label: 'Workout', to: '/workout' },
     ];
 
+    const recent = [...meals].reverse().slice(0, 4);
+
     return (
         <div className="pb-28 pt-6 px-4 max-w-lg mx-auto" style={{ animation: 'var(--animate-fade-up)' }}>
             <header className="flex justify-between items-center mb-7">
                 <div>
-                    <p className="text-xs font-semibold text-ink-faint uppercase tracking-widest">Good morning</p>
+                    <p className="text-xs font-semibold text-ink-faint uppercase tracking-widest">Welcome back</p>
                     <h1 className="text-2xl font-extrabold text-ink tracking-tight flex items-center gap-1.5">
-                        {user?.name?.split(' ')[0] || 'Friend'} <span>👋</span>
+                        {data?.name?.split(' ')[0] || user?.name?.split(' ')[0] || 'Friend'} <span>👋</span>
                     </h1>
                 </div>
                 <button className="relative w-10 h-10 rounded-full glass shadow-soft flex items-center justify-center text-ink-soft">
@@ -59,9 +113,12 @@ const Dashboard = ({ user }) => {
                 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 className="bg-surface rounded-card p-6 shadow-soft border border-line mb-4"
             >
-                <div className="flex items-center gap-2 mb-5">
-                    <Activity className="text-health-600" size={16} />
-                    <span className="text-xs font-bold text-ink-soft uppercase tracking-widest">Today's Energy</span>
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Activity className="text-health-600" size={16} />
+                        <span className="text-xs font-bold text-ink-soft uppercase tracking-widest">Today's Energy</span>
+                    </div>
+                    {!loaded && <Loader2 size={14} className="animate-spin text-ink-faint" />}
                 </div>
 
                 <div className="flex gap-6 items-center">
@@ -83,104 +140,126 @@ const Dashboard = ({ user }) => {
                             </defs>
                         </svg>
                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-2xl font-extrabold text-ink tracking-tight">{stats.calories.toLocaleString()}</span>
-                            <span className="text-[10px] text-ink-faint uppercase font-bold tracking-widest">of {stats.target}</span>
+                            <span className="text-2xl font-extrabold text-ink tracking-tight">{calories.toLocaleString()}</span>
+                            <span className="text-[10px] text-ink-faint uppercase font-bold tracking-widest">of {target.toLocaleString()}</span>
                         </div>
                     </div>
 
                     <div className="flex-1 space-y-3">
-                        <Macro label="Protein" value={stats.protein} goal={150} unit="g" pct={75} />
-                        <Macro label="Carbs" value={stats.carbs} goal={260} unit="g" pct={80} />
-                        <Macro label="Fat" value={stats.fat} goal={70} unit="g" pct={80} />
+                        <Macro label="Protein" value={protein} goal={proteinTarget} unit="g" />
+                        <Macro label="Carbs" value={carbs} goal={carbsTarget} unit="g" />
+                        <Macro label="Fat" value={fat} goal={fatTarget} unit="g" />
                     </div>
                 </div>
+                {todayMeals.length === 0 && loaded && (
+                    <p className="text-xs text-ink-faint text-center mt-4">
+                        No meals logged today — <button onClick={() => navigate('/meal')} className="text-health-600 font-bold">analyze one</button> to fill this in.
+                    </p>
+                )}
             </motion.div>
 
-            {/* Daily insight */}
-            <div className="bg-surface rounded-card p-6 shadow-soft border border-line mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                    <Wind className="text-health-500" size={16} />
-                    <span className="text-xs font-bold text-ink-soft uppercase tracking-widest">Daily Insight</span>
+            {/* Weight goal */}
+            {hasGoal ? (
+                <div className="bg-ink rounded-card p-6 shadow-float relative overflow-hidden mb-4">
+                    <div className="absolute -top-12 -right-10 w-36 h-36 bg-health-500/25 rounded-full blur-2xl" />
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-2 mb-2">
+                            <Target className="text-health-300" size={15} />
+                            <span className="text-[11px] font-bold text-health-300 uppercase tracking-widest">Weight goal</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-white leading-tight mb-1">
+                            {profile.goal === 'lose weight' ? 'Lose' : 'Gain'} to {profile.targetWeight} kg
+                        </h3>
+                        <p className="text-xs text-white/60 mb-5">
+                            {profile.startWeight || profile.weight} kg → {profile.targetWeight} kg
+                            {profile.deadline ? ` · by ${new Date(profile.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <div className="flex-1 bg-white/15 h-2 rounded-full overflow-hidden">
+                                <motion.div className="h-full brand-gradient rounded-full"
+                                    initial={{ width: 0 }} animate={{ width: `${goalPct ?? 0}%` }}
+                                    transition={{ duration: 0.9, ease: 'easeOut' }} />
+                            </div>
+                            <span className="text-xs font-bold text-white whitespace-nowrap">{goalPct ?? 0}%</span>
+                        </div>
+                    </div>
                 </div>
-                <p className="text-ink text-sm leading-relaxed mb-4">
-                    Your heart-rate variability is higher today — a great window for a high-intensity
-                    session followed by deep hydration.
-                </p>
-                <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-health-50 flex items-center justify-center">
-                        <Sparkles className="text-health-600" size={15} />
+            ) : loaded && (
+                <button
+                    onClick={() => navigate('/profile')}
+                    className="w-full bg-surface border border-line rounded-card p-5 shadow-soft mb-4 flex items-center gap-3 text-left active:scale-[0.99] transition-transform"
+                >
+                    <div className="w-10 h-10 rounded-xl bg-health-50 flex items-center justify-center">
+                        <Target className="text-health-600" size={18} />
                     </div>
                     <div>
-                        <span className="block text-xs font-bold text-ink">Sanctuary AI</span>
-                        <span className="block text-[10px] text-ink-faint">Your wellness guide</span>
+                        <span className="block text-sm font-bold text-ink">Set a weight goal</span>
+                        <span className="block text-xs text-ink-soft">Add your target in Profile to track progress here.</span>
                     </div>
-                </div>
-            </div>
+                </button>
+            )}
 
-            {/* Bottom grid */}
-            <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-7 bg-surface rounded-card p-5 shadow-soft border border-line">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-xs font-bold text-ink uppercase tracking-widest">Movement</span>
-                        <span className="text-[11px] font-bold text-health-600">See all</span>
-                    </div>
+            {/* Recent meals */}
+            <div className="bg-surface rounded-card p-6 shadow-soft border border-line">
+                <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-bold text-ink uppercase tracking-widest">Recent Meals</span>
+                    <button onClick={() => navigate('/meal')} className="text-[11px] font-bold text-health-600">Add meal</button>
+                </div>
+                {recent.length > 0 ? (
                     <div className="space-y-3.5">
-                        <ActivityRow icon={Activity} title="Morning Run" meta="5.2 km · 35 min" kcal="+340" />
-                        <ActivityRow icon={ArrowUpRight} title="Yoga Flow" meta="Guided · 45 min" kcal="+120" />
-                    </div>
-                </div>
-
-                <div className="col-span-5 brand-gradient rounded-card p-5 shadow-glow text-white relative overflow-hidden">
-                    <div className="flex items-center gap-1.5 mb-2">
-                        <Droplets size={15} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">Water</span>
-                    </div>
-                    <p className="text-[10px] text-white/80 leading-tight mb-4">60% of your daily goal</p>
-                    <div className="flex items-end gap-1 mb-4 h-12">
-                        {[30, 60, 45, 90, 70].map((h, i) => (
-                            <div key={i} className="flex-1 bg-white/20 rounded-full relative h-full">
-                                <div className="absolute bottom-0 inset-x-0 bg-white rounded-full" style={{ height: `${h}%` }} />
+                        {recent.map((m, i) => (
+                            <div key={i} className="flex items-center justify-between">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-9 h-9 rounded-full bg-health-50 flex items-center justify-center flex-shrink-0">
+                                        <Utensils className="text-health-600" size={15} />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <span className="block text-xs font-bold text-ink truncate">{m.food || 'Meal'}</span>
+                                        <span className="block text-[10px] text-ink-faint">
+                                            {m.protein || 0}g P · {m.carbs || 0}g C · {m.fat || 0}g F
+                                        </span>
+                                    </div>
+                                </div>
+                                <span className="text-[11px] font-bold text-health-600 whitespace-nowrap flex items-center gap-1">
+                                    <Flame size={12} /> {Math.round(m.calories || 0)}
+                                </span>
                             </div>
                         ))}
                     </div>
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-2xl font-extrabold">{stats.hydration.toFixed(1)}</span>
-                        <span className="text-xs font-bold text-white/70">/ 3.0 L</span>
+                ) : (
+                    <div className="flex flex-col items-center text-center py-6">
+                        <div className="w-12 h-12 rounded-2xl bg-health-50 flex items-center justify-center mb-3">
+                            <Utensils className="text-health-600" size={20} />
+                        </div>
+                        <p className="text-xs text-ink-faint max-w-[220px]">No meals yet. Analyze your first meal and it'll show up here.</p>
                     </div>
-                </div>
+                )}
+            </div>
+
+            <div className="flex items-center justify-center gap-2 mt-6 text-ink-faint">
+                <Sparkles size={13} className="text-health-500" />
+                <span className="text-[11px] font-semibold">Sanctuary AI · your wellness guide</span>
             </div>
         </div>
     );
 };
 
-const Macro = ({ label, value, goal, unit, pct }) => (
-    <div>
-        <div className="flex justify-between items-end mb-1">
-            <span className="text-[11px] font-semibold text-ink-soft">{label}</span>
-            <span className="text-[11px] font-bold text-ink">{value}{unit} <span className="text-ink-faint font-medium">/ {goal}{unit}</span></span>
-        </div>
-        <div className="w-full h-1.5 bg-line rounded-full overflow-hidden">
-            <motion.div
-                className="h-full brand-gradient rounded-full"
-                initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
-            />
-        </div>
-    </div>
-);
-
-const ActivityRow = ({ icon: Icon, title, meta, kcal }) => (
-    <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-health-50 flex items-center justify-center">
-                <Icon className="text-health-600" size={16} />
+const Macro = ({ label, value, goal, unit }) => {
+    const pct = Math.min((value / (goal || 1)) * 100, 100);
+    return (
+        <div>
+            <div className="flex justify-between items-end mb-1">
+                <span className="text-[11px] font-semibold text-ink-soft">{label}</span>
+                <span className="text-[11px] font-bold text-ink">{value}{unit} <span className="text-ink-faint font-medium">/ {goal}{unit}</span></span>
             </div>
-            <div>
-                <span className="block text-xs font-bold text-ink">{title}</span>
-                <span className="block text-[10px] text-ink-faint">{meta}</span>
+            <div className="w-full h-1.5 bg-line rounded-full overflow-hidden">
+                <motion.div
+                    className="h-full brand-gradient rounded-full"
+                    initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
+                />
             </div>
         </div>
-        <span className="text-[11px] font-bold text-health-600">{kcal}</span>
-    </div>
-);
+    );
+};
 
 export default Dashboard;

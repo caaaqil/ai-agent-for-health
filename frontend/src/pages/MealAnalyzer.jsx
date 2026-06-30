@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { Camera, Sparkles, ChevronRight, Flame, Beef, Droplet, Wheat, Loader2, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Sparkles, ChevronRight, Flame, Beef, Droplet, Wheat, Loader2, X, History } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import api from '../services/api';
+import api, { authService } from '../services/api';
 import AppHeader from '../components/AppHeader';
 
 const MealAnalyzer = ({ user }) => {
@@ -9,7 +9,21 @@ const MealAnalyzer = ({ user }) => {
     const [image, setImage] = useState(null); // data URL for preview + upload
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
+    const [history, setHistory] = useState([]);
     const fileInputRef = useRef(null);
+
+    // Load previously analyzed meals from the database so they persist across sessions.
+    const loadHistory = async () => {
+        if (!user?._id) return;
+        try {
+            const res = await authService.getProfile(user._id);
+            setHistory([...(res.data.mealHistory || [])].reverse());
+        } catch {
+            /* ignore — just show no history */
+        }
+    };
+
+    useEffect(() => { loadHistory(); }, [user._id]);
 
     const onPickImage = (e) => {
         const file = e.target.files?.[0];
@@ -30,6 +44,10 @@ const MealAnalyzer = ({ user }) => {
                 image: image || undefined,
             });
             setResult(res.data);
+            loadHistory(); // the meal was just saved — refresh the list
+            setMealText('');
+            setImage(null);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         } catch (err) {
             setResult({
                 calories: 642, protein: 32, fat: 24, carbs: 48,
@@ -171,6 +189,32 @@ const MealAnalyzer = ({ user }) => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Saved meal history */}
+            {history.length > 0 && (
+                <div className="mt-8">
+                    <div className="flex items-center gap-2 mb-4">
+                        <History size={15} className="text-ink-soft" />
+                        <span className="text-[11px] font-bold text-ink-soft uppercase tracking-widest">Meal History</span>
+                    </div>
+                    <div className="space-y-2.5">
+                        {history.map((m, i) => (
+                            <div key={i} className="bg-surface rounded-2xl p-4 shadow-soft border border-line flex items-center justify-between">
+                                <div className="min-w-0">
+                                    <span className="block text-sm font-bold text-ink truncate">{m.food || 'Meal'}</span>
+                                    <span className="block text-[11px] text-ink-faint mt-0.5">
+                                        {m.protein || 0}g P · {m.carbs || 0}g C · {m.fat || 0}g F
+                                        {m.date ? ` · ${new Date(m.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+                                    </span>
+                                </div>
+                                <span className="text-xs font-bold text-health-600 whitespace-nowrap flex items-center gap-1 ml-3">
+                                    <Flame size={13} /> {Math.round(m.calories || 0)} kcal
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
