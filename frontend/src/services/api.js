@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-export const API_URL = 'http://localhost:5000/api';
+// In production set VITE_API_URL (e.g. https://your-backend.onrender.com/api)
+// in your Vercel project's Environment Variables. Falls back to local dev.
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
     baseURL: API_URL,

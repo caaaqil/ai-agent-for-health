@@ -1,38 +1,5 @@
-const axios = require('axios');
 const User = require('../models/User');
-
-const OLLAMA_URL = process.env.OLLAMA_URL || 'http://127.0.0.1:11434/api/generate';
-const AI_MODEL = process.env.AI_MODEL || 'phi3:latest';
-const AI_VISION_MODEL = process.env.AI_VISION_MODEL || 'llava';
-console.log('AI Controller initialized with Ollama URL:', OLLAMA_URL);
-
-/**
- * Pipe an Ollama streaming response (newline-delimited JSON) to the client
- * as plain text tokens. Returns the full concatenated text once finished.
- */
-function pipeOllamaStream(ollamaRes, clientRes, { onToken } = {}) {
-    return new Promise((resolve, reject) => {
-        let full = '';
-        ollamaRes.data.on('data', (buf) => {
-            buf.toString().split('\n').forEach((line) => {
-                line = line.trim();
-                if (!line) return;
-                try {
-                    const json = JSON.parse(line);
-                    if (json.response) {
-                        full += json.response;
-                        clientRes.write(json.response);
-                        onToken?.(json.response);
-                    }
-                } catch {
-                    /* ignore partial / non-JSON lines */
-                }
-            });
-        });
-        ollamaRes.data.on('end', () => { clientRes.end(); resolve(full); });
-        ollamaRes.data.on('error', (err) => { try { clientRes.end(); } catch { /* noop */ } reject(err); });
-    });
-}
+const { streamChat, jsonCompletion } = require('../services/ai');
 
 /**
  * Build a short profile summary the AI can use to personalise its answers.
@@ -108,19 +75,16 @@ Rules you MUST follow:
 - When giving numbers (calories, macros, etc.), make sure they are consistent and realistic. If unsure, give an approximate range and say it is approximate.
 - Do not invent claims. Prefer short, clear, practical advice.`;
     const userContext = await buildUserContext(userId);
-    const fullPrompt = `${systemPrompt}\n${userContext}\nUser: ${message}\nAssistant:`;
 
     try {
-        const ollamaRes = await axios.post(
-            OLLAMA_URL,
-            { model: AI_MODEL, prompt: fullPrompt, stream: true },
-            { responseType: 'stream', timeout: 120000 }
-        );
-
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
 
-        const full = await pipeOllamaStream(ollamaRes, res);
+        const full = await streamChat({
+            system: `${systemPrompt}\n${userContext}`,
+            user: message,
+            clientRes: res,
+        });
 
         if (userId && full) {
             try {
@@ -137,9 +101,9 @@ Rules you MUST follow:
             }
         }
     } catch (err) {
-        console.error('Ollama Error Detail:', err.response ? err.response.data : err.message);
+        console.error('AI Error Detail:', err.response ? err.response.data : err.message);
         if (!res.headersSent) {
-            res.status(500).json({ message: 'AI failed to respond. Make sure Ollama is running and the model is pulled.' });
+            res.status(500).json({ message: 'AI failed to respond. Check the AI provider configuration.' });
         } else {
             res.end();
         }
@@ -168,17 +132,7 @@ Return ONLY valid JSON in exactly this shape (numbers must be consistent and rea
 }`;
 
     try {
-        const payload = {
-            model: image ? AI_VISION_MODEL : AI_MODEL,
-            prompt,
-            stream: false,
-            format: 'json',
-        };
-        // Ollama expects raw base64 (no data: prefix)
-        if (image) payload.images = [image.replace(/^data:image\/\w+;base64,/, '')];
-
-        const response = await axios.post(OLLAMA_URL, payload, { timeout: 180000 });
-        const analysis = JSON.parse(response.data.response);
+        const analysis = await jsonCompletion({ prompt, image });
 
         if (userId) {
             try {
@@ -195,8 +149,8 @@ Return ONLY valid JSON in exactly this shape (numbers must be consistent and rea
         console.error('Meal analysis error:', err.response ? err.response.data : err.message);
         res.status(500).json({
             message: image
-                ? 'Meal analysis failed. Image analysis needs a vision model — run "ollama pull llava".'
-                : 'Meal analysis failed. Make sure Ollama is running.',
+                ? 'Meal analysis failed. Image analysis needs a vision-capable model.'
+                : 'Meal analysis failed. Check the AI provider configuration.',
         });
     }
 };
@@ -208,10 +162,9 @@ exports.generateWorkout = async (req, res) => {
     const { userId, goal } = req.body;
     const userContext = await buildUserContext(userId);
 
-    const prompt = `You are a professional fitness coach.
-Create a simple, beginner-friendly 7-day workout plan for this goal: "${goal}".
-${userContext}Rules:
-- Tailor the plan to the user's profile above (age, weight, goal) when it is provided.
+    const system = `You are a professional fitness coach.
+Rules:
+- Tailor the plan to the user's profile when it is provided.
 - Include rest days.
 - For each day give the focus, 2-4 exercises and a duration.
 - Keep it realistic and easy to follow.
@@ -219,22 +172,16 @@ ${userContext}Rules:
 Format:
 Day 1 — <focus> (<duration>): <exercises>
 Day 2 — ...`;
+    const user = `Create a simple, beginner-friendly 7-day workout plan for this goal: "${goal}".\n${userContext}`;
 
     try {
-        const ollamaRes = await axios.post(
-            OLLAMA_URL,
-            { model: AI_MODEL, prompt, stream: true },
-            { responseType: 'stream', timeout: 120000 }
-        );
-
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Cache-Control', 'no-cache');
-
-        await pipeOllamaStream(ollamaRes, res);
+        await streamChat({ system, user, clientRes: res });
     } catch (err) {
         console.error('Workout generation error:', err.response ? err.response.data : err.message);
         if (!res.headersSent) {
-            res.status(500).json({ message: 'Workout generation failed. Make sure Ollama is running.' });
+            res.status(500).json({ message: 'Workout generation failed. Check the AI provider configuration.' });
         } else {
             res.end();
         }
